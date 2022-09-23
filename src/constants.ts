@@ -1,5 +1,20 @@
 const BASE_URL = "https://api.binance.com/api/v3/";
 
+const TIME_VISIBLE_MAP: { [key: string]: boolean } = {
+  "1s": true,
+  "1m": true,
+  "3m": true,
+  "5m": true,
+  "15m": true,
+  "30m": true,
+  "1h": true,
+  "2h": true,
+  "4h": true,
+  "6h": true,
+  "8h": true,
+  "12h": true,
+};
+
 const INTERVAL_LIST = [
   "1s",
   "1m",
@@ -170,4 +185,4 @@ const initialData: Array<{
   },
   { time: "2018-12-11", open: 174.3, high: 175.6, low: 171.24, close: 172.21 },
 ];
-export { initialData, INTERVAL_LIST };
+export { initialData, INTERVAL_LIST, BASE_URL, TIME_VISIBLE_MAP };

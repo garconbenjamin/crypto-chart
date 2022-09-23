@@ -1,18 +1,44 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import ChatrComponent from "./../components/ChartComponent";
 import { INTERVAL_LIST } from "./../constants";
-import moment from "moment";
+import moment, { DurationInputArg2 } from "moment";
 import type { Kline } from "./../types/kline";
+type ChartKline = {
+  time: number;
+  open: number;
+  close: number;
+  high: number;
+  low: number;
+};
+const handleInterval = (str: string) => ({
+  basis: Number(str.substring(0, str.length - 1)),
+  unit: str.substring(str.length - 1, str.length),
+});
 function Chart() {
   const { symbol } = useParams();
   const [intervalValue, setIntervalValue] = useState("1d");
+  const [offset, setOffset] = useState(0);
 
-  const [isPaused, setPause] = useState(false);
-  const [data, setData] = useState([]);
+  const [data, setData] = useState<ChartKline[]>([]);
+
   const [ws, setWs] = useState<WebSocket | null>(null);
-
-  // { time: "2018-12-11", open: 174.3, high: 175.6, low: 171.24, close: 172.21 }
+  const { basis, unit } = handleInterval(intervalValue);
+  console.log("data", data);
+  const endTime = useMemo(
+    () =>
+      moment(new Date())
+        .add(offset * -1000 * basis, unit as DurationInputArg2)
+        .valueOf(),
+    []
+  );
+  const startTime = useMemo(
+    () =>
+      moment(new Date())
+        .add((offset + 1) * -1000 * basis, unit as DurationInputArg2)
+        .valueOf(),
+    [offset]
+  );
 
   useEffect(() => {
     // const websocket = new WebSocket(
@@ -27,27 +53,19 @@ function Chart() {
 
     const getHistoryData = async () => {
       const res = await fetch(
-        `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${intervalValue}&endTime=${new Date().getTime()}&limit=1000`
+        `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${intervalValue}&startTime=${startTime}&endTime=${endTime}&limit=1000`
       );
       const data = await res.json();
 
-      const klineData = data.map((kline: Kline) => {
+      const klineData: ChartKline[] = data.map((kline: Kline) => {
         const [
           openTime, // Kline open time
           openPrice, // Open price
           highPrice, // High price
           lowPrice, // Low price
           closePrice, // Close price
-          volume, // Volume
-          closeTime, // Kline Close time
-          // _, // Quote asset volume
-          // _, // Number of trades
-          // _, // Taker buy base asset volume
-          // _, // Taker buy quote asset volume
-          // _, // Unused field, ignore.]
         ] = kline;
-        const time = String(moment(openTime).format("yyyy/MM/DD HH:mm:ss"));
-        console.log("time", moment(time));
+
         return {
           time: Math.floor(openTime / 1000),
           open: openPrice,
@@ -56,11 +74,14 @@ function Chart() {
           low: lowPrice,
         };
       });
-      console.log("kline", klineData);
+      const newData: ChartKline[] = Array.from(data);
+
+      newData.concat(klineData);
+      console.log("newData", newData);
       setData(klineData);
     };
     getHistoryData();
-  }, [symbol, intervalValue]);
+  }, [symbol, intervalValue, startTime, endTime]);
   return (
     <div>
       {symbol}
@@ -73,7 +94,15 @@ function Chart() {
         ))}
       </select>
       <div>
-        <ChatrComponent colors={{}} data={data} interval={intervalValue} />
+        {data.length && (
+          <ChatrComponent
+            colors={{}}
+            data={data}
+            interval={intervalValue}
+            onOffsetChange={setOffset}
+            offset={offset}
+          />
+        )}
       </div>
     </div>
   );

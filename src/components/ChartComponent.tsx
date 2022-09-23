@@ -5,14 +5,17 @@ import {
   LayoutOptions,
   CrosshairMode,
   IChartApi,
-  TimeRange,
 } from "lightweight-charts";
 import { useEffect, useRef, useState } from "react";
-import moment from "moment";
+import { TIME_VISIBLE_MAP } from "./../constants";
+
+const LIMIT = 1000;
 type ChartComponentProps = {
   interval?: string;
   data: any[];
   colors: Partial<AreaStyleOptions & LayoutOptions>;
+  onOffsetChange: (offset: number) => void;
+  offset: number;
 };
 function ChartComponent(props: ChartComponentProps) {
   const {
@@ -21,13 +24,14 @@ function ChartComponent(props: ChartComponentProps) {
       backgroundColor = "white",
       lineColor = "#2962FF",
       textColor = "black",
-      // areaTopColor = "#2962FF",
-      // areaBottomColor = "rgba(41, 98, 255, 0.28)"
     },
+    offset,
+    onOffsetChange,
     interval = "1d",
   } = props;
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [chartInstance, setChartInstance] = useState<IChartApi | null>(null);
+
   useEffect(() => {
     const chart = createChart(chartContainerRef.current as HTMLElement, {
       layout: {
@@ -41,21 +45,7 @@ function ChartComponent(props: ChartComponentProps) {
       width: chartContainerRef?.current?.clientWidth,
       height: 300,
       timeScale: {
-        timeVisible: [
-          "1s",
-          "1m",
-          "3m",
-          "5m",
-          "15m",
-          "30m",
-          "1h",
-          "2h",
-          "4h",
-          "6h",
-          "8h",
-          "12h",
-        ].includes(interval),
-        // visible: false,
+        timeVisible: TIME_VISIBLE_MAP[interval] || false,
       },
     });
     const handleResize = () => {
@@ -74,38 +64,26 @@ function ChartComponent(props: ChartComponentProps) {
 
       chart.remove();
     };
-  }, [
-    data,
-    backgroundColor,
-    lineColor,
-    textColor,
-    interval,
-    //   areaTopColor,
-    //   areaBottomColor
-  ]);
+  }, [data, backgroundColor, lineColor, textColor, interval]);
+  useEffect(() => {
+    if (chartInstance) {
+      chartInstance
+        .timeScale()
+        .subscribeVisibleLogicalRangeChange((newVisibleLogicalRange) => {
+          if (newVisibleLogicalRange) {
+            const { from } = newVisibleLogicalRange;
+
+            if (from && from < (LIMIT / 2) * -1) {
+              onOffsetChange(Math.ceil(Math.abs(from / LIMIT)));
+            }
+          }
+        });
+    }
+  }, [offset, onOffsetChange, chartInstance]);
   return (
     <div>
+      {offset}
       <div ref={chartContainerRef}></div>
-      <button
-        onClick={() => {
-          if (chartInstance) {
-            const timeScale = chartInstance.timeScale();
-            const { from, to } = timeScale.getVisibleLogicalRange() || {};
-            console.log("to", to);
-            console.log("from", from);
-            const startDateStamp = Number(from) * 1000;
-            const endDateStamp = Number(to) * 1000;
-            // timeScale.scrollToRealTime();
-            console.log(
-              "range",
-              moment(startDateStamp).format("yyyy/MM/DD"),
-              moment(endDateStamp).format("yyyy/MM/DD")
-            );
-          }
-        }}
-      >
-        time range
-      </button>
     </div>
   );
 }
