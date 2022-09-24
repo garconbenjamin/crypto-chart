@@ -1,87 +1,163 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams } from "react-router-dom";
-import ChatrComponent from "./../components/ChartComponent";
-import { INTERVAL_LIST } from "./../constants";
-import moment, { DurationInputArg2 } from "moment";
+
+import { INTERVAL_LIST, TIME_VISIBLE_MAP, LIMIT } from "./../constants";
+
 import type { Kline } from "./../types/kline";
-type ChartKline = {
-  time: number;
-  open: number;
-  close: number;
-  high: number;
-  low: number;
-};
-const handleInterval = (str: string) => ({
-  basis: Number(str.substring(0, str.length - 1)),
-  unit: str.substring(str.length - 1, str.length),
-});
+import {
+  createChart,
+  ColorType,
+  CrosshairMode,
+  ISeriesApi,
+  ITimeScaleApi,
+  CandlestickData,
+  Range,
+  Logical,
+  Time,
+} from "lightweight-charts";
+
+const generateKlineData = (rawData: Kline[]) =>
+  rawData.map((kline) => {
+    const [
+      openTime, // Kline open time
+      openPrice, // Open price
+      highPrice, // High price
+      lowPrice, // Low price
+      closePrice, // Close price
+    ] = kline;
+
+    return {
+      time: (openTime / 1000) as Time,
+      open: Number(openPrice),
+      close: Number(closePrice),
+      high: Number(highPrice),
+      low: Number(lowPrice),
+    };
+  });
 function Chart() {
   const { symbol } = useParams();
   const [intervalValue, setIntervalValue] = useState("1d");
-  const [offset, setOffset] = useState(0);
 
-  const [data, setData] = useState<ChartKline[]>([]);
+  const [initialData, setInitialData] = useState<CandlestickData[]>([]);
 
-  const [ws, setWs] = useState<WebSocket | null>(null);
-  const { basis, unit } = handleInterval(intervalValue);
-  console.log("data", data);
-  const endTime = useMemo(
-    () =>
-      moment(new Date())
-        .add(offset * -1000 * basis, unit as DurationInputArg2)
-        .valueOf(),
-    []
-  );
-  const startTime = useMemo(
-    () =>
-      moment(new Date())
-        .add((offset + 1) * -1000 * basis, unit as DurationInputArg2)
-        .valueOf(),
-    [offset]
-  );
+  const chartContainerRef = useRef<HTMLDivElement>(null);
+
+  const [timescalInstance, setTimescalInstance] =
+    useState<ITimeScaleApi | null>(null);
+  const [seriesInstance, setSeriesInstance] =
+    useState<ISeriesApi<"Candlestick"> | null>(null);
+  const [loadFlag, setLoadFlag] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
 
   useEffect(() => {
-    // const websocket = new WebSocket(
-    //   `wss://stream.binance.com:9443/stream?streams=btcusdt@miniTicker/${symbol}@kline_${intervalValue}`
-    // );
-    // setWs(websocket);
-    // websocket.onopen = () => console.log("ws opened");
-    // websocket.onclose = () => console.log("ws closed");
-    // websocket.onmessage = (event) => {
-    //   // console.log(event.data);
-    // };
-
     const getHistoryData = async () => {
       const res = await fetch(
-        `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${intervalValue}&startTime=${startTime}&endTime=${endTime}&limit=1000`
+        `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${intervalValue}&limit=${LIMIT}`
       );
-      const data = await res.json();
+      const rawData = await res.json();
 
-      const klineData: ChartKline[] = data.map((kline: Kline) => {
-        const [
-          openTime, // Kline open time
-          openPrice, // Open price
-          highPrice, // High price
-          lowPrice, // Low price
-          closePrice, // Close price
-        ] = kline;
+      const klineData = generateKlineData(rawData);
 
-        return {
-          time: Math.floor(openTime / 1000),
-          open: openPrice,
-          close: closePrice,
-          high: highPrice,
-          low: lowPrice,
-        };
-      });
-      const newData: ChartKline[] = Array.from(data);
-
-      newData.concat(klineData);
-      console.log("newData", newData);
-      setData(klineData);
+      setInitialData(klineData);
+      return klineData;
     };
-    getHistoryData();
-  }, [symbol, intervalValue, startTime, endTime]);
+    const chart = createChart(chartContainerRef.current as HTMLElement, {
+      layout: {
+        background: { type: ColorType.Solid, color: "white" },
+        textColor: "black",
+      },
+      crosshair: {
+        mode: CrosshairMode.Normal,
+      },
+
+      width: chartContainerRef?.current?.clientWidth,
+      height: 600,
+      timeScale: {
+        timeVisible: TIME_VISIBLE_MAP[intervalValue] || false,
+        shiftVisibleRangeOnNewBar: false,
+      },
+    });
+    const handleResize = () => {
+      chart.applyOptions({ width: chartContainerRef?.current?.clientWidth });
+    };
+    window.addEventListener("resize", handleResize);
+    const timescal = chart.timeScale();
+    setTimescalInstance(timescal);
+    const initSeries = async () => {
+      const candleSeries = chart.addCandlestickSeries({});
+      const data = await getHistoryData();
+      candleSeries.setData(data);
+      setSeriesInstance(candleSeries);
+    };
+    initSeries();
+    return () => {
+      window.removeEventListener("resize", handleResize);
+
+      chart.remove();
+    };
+  }, [intervalValue, symbol]);
+
+  useEffect(() => {
+    if (timescalInstance && seriesInstance) {
+      const onVisibleLogicalRangeChanged = (
+        newVisibleLogicalRange: Range<Logical>
+      ) => {
+        const barsInfo = seriesInstance.barsInLogicalRange(
+          newVisibleLogicalRange
+        );
+        // if there less than 50 bars to the left of the visible area
+
+        if (barsInfo !== null && barsInfo.barsBefore < 50) {
+          setLoadFlag(true);
+        }
+      };
+
+      timescalInstance.subscribeVisibleLogicalRangeChange(
+        (newVisibleLogicalRange) =>
+          newVisibleLogicalRange &&
+          onVisibleLogicalRangeChanged(newVisibleLogicalRange)
+      );
+    }
+  }, [seriesInstance, timescalInstance]);
+  useEffect(() => {
+    if (loadFlag && hasMore) {
+      const loadMore = async () => {
+        if (initialData.length) {
+          const endTime = Number(initialData[0].time) * 1000 - 1;
+          console.log("endTime", endTime);
+          const res = await fetch(
+            `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${intervalValue}&endTime=${endTime}&limit=${LIMIT}`
+          );
+
+          const rawData = await res.json();
+          if (rawData.length) {
+            const klineData = generateKlineData(rawData);
+
+            const newData = [...klineData, ...initialData];
+
+            setInitialData(newData);
+            seriesInstance?.setData(newData);
+          } else {
+            setHasMore(false);
+          }
+
+          setLoadFlag(false);
+        }
+      };
+
+      loadMore();
+    }
+  }, [
+    loadFlag,
+    seriesInstance,
+    setInitialData,
+    initialData,
+    hasMore,
+    setHasMore,
+    intervalValue,
+    symbol,
+  ]);
+
   return (
     <div>
       {symbol}
@@ -94,16 +170,19 @@ function Chart() {
         ))}
       </select>
       <div>
-        {data.length && (
-          <ChatrComponent
-            colors={{}}
-            data={data}
-            interval={intervalValue}
-            onOffsetChange={setOffset}
-            offset={offset}
-          />
-        )}
+        <div ref={chartContainerRef}></div>
       </div>
+
+      <button
+        onClick={() => {
+          const newData = initialData.filter((_, i) => i > 500);
+          setInitialData(newData);
+          seriesInstance?.setData(newData);
+        }}
+      >
+        update
+      </button>
+      <button onClick={() => setLoadFlag(true)}>fetch</button>
     </div>
   );
 }

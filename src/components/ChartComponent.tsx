@@ -5,38 +5,32 @@ import {
   LayoutOptions,
   CrosshairMode,
   IChartApi,
+  Range,
+  Logical,
+  ISeriesApi,
+  ITimeScaleApi,
 } from "lightweight-charts";
 import { useEffect, useRef, useState } from "react";
-import { TIME_VISIBLE_MAP } from "./../constants";
+import { TIME_VISIBLE_MAP, LIMIT } from "./../constants";
 
-const LIMIT = 1000;
 type ChartComponentProps = {
   interval?: string;
   data: any[];
-  colors: Partial<AreaStyleOptions & LayoutOptions>;
-  onOffsetChange: (offset: number) => void;
-  offset: number;
+  // colors: Partial<AreaStyleOptions & LayoutOptions>;
+  loadMore: () => void;
 };
 function ChartComponent(props: ChartComponentProps) {
-  const {
-    data,
-    colors: {
-      backgroundColor = "white",
-      lineColor = "#2962FF",
-      textColor = "black",
-    },
-    offset,
-    onOffsetChange,
-    interval = "1d",
-  } = props;
+  const { data, interval = "1d", loadMore } = props;
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [chartInstance, setChartInstance] = useState<IChartApi | null>(null);
-
+  const [timescalInstance, setTimescalInstance] =
+    useState<ITimeScaleApi | null>(null);
+  const [series, setSeries] = useState<ISeriesApi<"Candlestick"> | null>(null);
   useEffect(() => {
     const chart = createChart(chartContainerRef.current as HTMLElement, {
       layout: {
-        background: { type: ColorType.Solid, color: backgroundColor },
-        textColor,
+        background: { type: ColorType.Solid, color: "white" },
+        textColor: "black",
       },
       crosshair: {
         mode: CrosshairMode.Normal,
@@ -46,44 +40,80 @@ function ChartComponent(props: ChartComponentProps) {
       height: 300,
       timeScale: {
         timeVisible: TIME_VISIBLE_MAP[interval] || false,
+        shiftVisibleRangeOnNewBar: false,
       },
     });
+    setChartInstance(chart);
+    const candleSeries = chart.addCandlestickSeries({});
+    candleSeries.setData(data);
+    setSeries(candleSeries);
+    const timescal = chart.timeScale();
+    setTimescalInstance(timescal);
+
     const handleResize = () => {
       chart.applyOptions({ width: chartContainerRef?.current?.clientWidth });
     };
-
-    chart.timeScale().fitContent();
-
-    const candleSeries = chart.addCandlestickSeries({});
-    candleSeries.setData(data);
-    setChartInstance(chart);
     window.addEventListener("resize", handleResize);
 
     return () => {
-      window.removeEventListener("resize", handleResize);
+      // window.removeEventListener("resize", handleResize);
 
       chart.remove();
     };
-  }, [data, backgroundColor, lineColor, textColor, interval]);
-  useEffect(() => {
-    if (chartInstance) {
-      chartInstance
-        .timeScale()
-        .subscribeVisibleLogicalRangeChange((newVisibleLogicalRange) => {
-          if (newVisibleLogicalRange) {
-            const { from } = newVisibleLogicalRange;
+  }, [interval, loadMore]);
 
-            if (from && from < (LIMIT / 2) * -1) {
-              onOffsetChange(Math.ceil(Math.abs(from / LIMIT)));
-            }
-          }
-        });
+  useEffect(() => {
+    if (timescalInstance && series) {
+      const onVisibleLogicalRangeChanged = (
+        newVisibleLogicalRange: Range<Logical>
+      ) => {
+        const barsInfo = series.barsInLogicalRange(newVisibleLogicalRange);
+        // if there less than 50 bars to the left of the visible area
+
+        if (barsInfo !== null && barsInfo.barsBefore < 50) {
+          // loadMore();
+        }
+      };
+
+      timescalInstance.subscribeVisibleLogicalRangeChange(
+        (newVisibleLogicalRange) =>
+          newVisibleLogicalRange &&
+          onVisibleLogicalRangeChanged(newVisibleLogicalRange)
+      );
     }
-  }, [offset, onOffsetChange, chartInstance]);
+  }, [timescalInstance, series, loadMore]);
+  useEffect(() => {
+    if (series) {
+      series.setData(data);
+    }
+  }, [data, series]);
   return (
     <div>
-      {offset}
-      <div ref={chartContainerRef}></div>
+      {data.length}
+      <div ref={chartContainerRef}></div>{" "}
+      <button
+        onClick={() => {
+          const updateData = data[data.length - 1];
+
+          updateData.open = "1080";
+          updateData.close = "1000";
+          updateData.high = "1115";
+          updateData.low = "900";
+
+          series?.update(updateData);
+        }}
+      >
+        update new
+      </button>
+      <button
+        onClick={() => {
+          const updateData = data.filter((_, i) => i > 500);
+
+          series?.setData(updateData);
+        }}
+      >
+        add old
+      </button>
     </div>
   );
 }
