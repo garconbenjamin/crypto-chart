@@ -12,4 +12,10 @@ type Kline = [
   string, // Taker buy quote asset volume
   string // Unused field, ignore.
 ];
-export type { Kline };
+type Symbol = {
+  symbol: string;
+  lastPrice: number;
+  closePrice: number;
+  volume: string;
+};
+export type { Kline, Symbol };
