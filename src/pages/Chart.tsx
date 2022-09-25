@@ -2,7 +2,6 @@ import { useEffect, useState, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { getHistoryData } from "api";
 import { INTERVAL_LIST, TIME_VISIBLE_MAP } from "constant";
-
 import {
   createChart,
   ColorType,
@@ -12,7 +11,9 @@ import {
   CandlestickData,
   Range,
   Logical,
+  Time,
 } from "lightweight-charts";
+import type { StreamKline } from "types";
 
 function Chart() {
   const { symbol } = useParams();
@@ -21,6 +22,8 @@ function Chart() {
 
   const [loadFlag, setLoadFlag] = useState(false);
   const [hasMore, setHasMore] = useState(false);
+
+  const [candlestickInfo, setCandlestickInfo] = useState<any>(null);
 
   const [timescalInstance, setTimescalInstance] =
     useState<ITimeScaleApi | null>(null);
@@ -36,24 +39,26 @@ function Chart() {
         textColor: "black",
       },
       crosshair: {
-        mode: CrosshairMode.Normal,
+        mode: CrosshairMode.Magnet,
       },
 
       width: chartContainerRef?.current?.clientWidth,
       height: 600,
       timeScale: {
         timeVisible: TIME_VISIBLE_MAP[intervalValue] || false,
-        shiftVisibleRangeOnNewBar: false,
       },
     });
     const handleResize = () => {
       chart.applyOptions({ width: chartContainerRef?.current?.clientWidth });
     };
     window.addEventListener("resize", handleResize);
+    const candleSeries = chart.addCandlestickSeries({});
+    chart.subscribeCrosshairMove((param) => {
+      setCandlestickInfo(param.seriesPrices.get(candleSeries));
+    });
     const timescal = chart.timeScale();
     setTimescalInstance(timescal);
     const initSeries = async () => {
-      const candleSeries = chart.addCandlestickSeries({});
       const data = await getHistoryData({
         symbol: symbol || "",
         intervalValue,
@@ -70,6 +75,40 @@ function Chart() {
       chart.remove();
     };
   }, [intervalValue, symbol]);
+
+  /** Realtime ticker */
+  useEffect(() => {
+    const websocket = new WebSocket(
+      `wss://stream.binance.com:9443/ws/${symbol?.toLowerCase()}@kline_${intervalValue}`
+    );
+
+    websocket.onmessage = (event) => {
+      const data: StreamKline = JSON.parse(event.data);
+
+      const {
+        k: { o, c, h, l, t },
+      } = data;
+      const currentBar = {
+        time: (t / 1000) as Time,
+        open: Number(o),
+        close: Number(c),
+        high: Number(h),
+        low: Number(l),
+      };
+
+      seriesInstance?.update(currentBar);
+    };
+    websocket.onopen = (event) => {
+      console.log("open");
+    };
+    websocket.onclose = (event) => {
+      console.log("close");
+    };
+    return () => {
+      websocket.close();
+    };
+  }, [seriesInstance, symbol, intervalValue]);
+
   /** Lazy load trigger*/
   useEffect(() => {
     if (timescalInstance && seriesInstance) {
@@ -92,6 +131,7 @@ function Chart() {
       );
     }
   }, [symbol, seriesInstance, timescalInstance]);
+
   /** Lazy load */
   useEffect(() => {
     if (loadFlag && hasMore) {
@@ -130,15 +170,23 @@ function Chart() {
 
   return (
     <div>
-      {symbol}
+      <h2 className="title">{symbol}</h2>
       <div className="interval-controls">
-        {INTERVAL_LIST.map((value) => (
-          <button key={value} onClick={() => setIntervalValue(value)}>
-            {value}
-          </button>
-        ))}
+        <div>Interval</div>
+
+        <select onChange={(e) => setIntervalValue(e.target.value)}>
+          {INTERVAL_LIST.map((value) => (
+            <option key={value}>{value}</option>
+          ))}
+        </select>
       </div>
-      <div>
+      <div className="chart-outer-container">
+        <div className="price-detail-bar">
+          {candlestickInfo &&
+            Object.entries(candlestickInfo).map(([name, price]) => (
+              <span key={name}>{name + ": " + price}</span>
+            ))}
+        </div>
         <div ref={chartContainerRef}></div>
       </div>
     </div>

@@ -1,8 +1,25 @@
 .interval-controls {
-  display: flex;
   margin-bottom: 10px;
-  button {
-    padding: 5px;
-    border: #ccc 1px solid;
+  margin-left: 20px;
+  div {
+    margin-bottom: 5px;
+  }
+  select {
+    width: 200px;
+  }
+}
+.chart-outer-container {
+  position: relative;
+}
+.price-detail-bar {
+  position: absolute;
+  z-index: 2;
+  top: 10px;
+  left: 20px;
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 150px);
+  span {
+    margin-right: 20px;
   }
 }

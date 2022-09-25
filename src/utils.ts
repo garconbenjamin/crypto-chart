@@ -1,5 +1,6 @@
 import { Time } from "lightweight-charts";
 import type { Kline } from "types";
+import moment from "moment";
 const generateKlineData = (rawData: Kline[]) =>
   rawData.map((kline) => {
     const [
@@ -12,6 +13,7 @@ const generateKlineData = (rawData: Kline[]) =>
 
     return {
       time: (openTime / 1000) as Time,
+      // time: (moment(openTime).startOf("D").valueOf() / 1000) as Time,
       open: Number(openPrice),
       close: Number(closePrice),
       high: Number(highPrice),

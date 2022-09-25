@@ -6,7 +6,7 @@ function Selection() {
   const [list, setList] = useState([]);
 
   const [offset, setOffset] = useState(0);
-  const [currentPage, setCurrentPage] = useState(0);
+
   useEffect(() => {
     const getData = async () => {
       const res = await fetch(
@@ -34,7 +34,7 @@ function Selection() {
 
   return (
     <div>
-      <h1>selection</h1>
+      <h2 className="title">Select a market</h2>
 
       <div>
         <ul className="symbol-list">
@@ -47,38 +47,22 @@ function Selection() {
         </ul>
       </div>
       <div className="pagination">
-        <button
-          onClick={() => {
-            setOffset((offset) => offset - 10);
-          }}
-          disabled={offset === 0}
-        >
-          Previous
-        </button>
-        {Array(Math.floor(list.length / 20))
-          .fill(true)
-          .map((_, i) => {
-            const page = i;
-            return (
-              <button
-                className={`page-number ${
-                  currentPage === page ? "active" : ""
-                }`}
-                key={"p" + i}
-                onClick={() => {
-                  setOffset(page * 20);
+        {offset !== 0 && (
+          <button
+            onClick={() => {
+              setOffset((offset) => offset - 10);
+            }}
+            disabled={offset === 0}
+          >
+            Previous
+          </button>
+        )}
 
-                  setCurrentPage(page);
-                }}
-              >
-                {page + 1}
-              </button>
-            );
-          })}
         <button
           onClick={() => {
             setOffset((offset) => offset + 10);
           }}
+          disabled={list.length - offset < 20}
         >
           Next
         </button>
