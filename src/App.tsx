@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
+import { HashRouter as Router, Route, Routes } from "react-router-dom";
 import "./styles/app.scss";
 import Chart from "pages/Chart";
 import Selection from "pages/Selection";
@@ -7,7 +7,7 @@ export default function App() {
     <div className="App">
       <Router>
         <Routes>
-          <Route path="/" element={<Selection />} />
+          <Route path="/select" element={<Selection />} />
           <Route path="/chart/:symbol" element={<Chart />} />
         </Routes>
       </Router>
