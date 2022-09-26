@@ -7,7 +7,7 @@ export default function App() {
     <div className="App">
       <Router>
         <Routes>
-          <Route path="/select" element={<Selection />} />
+          <Route path="/" element={<Selection />} />
           <Route path="/chart/:symbol" element={<Chart />} />
         </Routes>
       </Router>
