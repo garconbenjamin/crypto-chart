@@ -174,7 +174,10 @@ function Chart() {
       <div className="interval-controls">
         <div>Interval</div>
 
-        <select onChange={(e) => setIntervalValue(e.target.value)}>
+        <select
+          onChange={(e) => setIntervalValue(e.target.value)}
+          value={intervalValue}
+        >
           {INTERVAL_LIST.map((value) => (
             <option key={value}>{value}</option>
           ))}
