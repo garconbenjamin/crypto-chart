@@ -2,6 +2,8 @@
 
 Crypto currency chart is a simple website displaying realtime-data from [Binance](https://www.binance.com/).
 
+[Demo](https://garconbenjamin.github.io/crypto-chart/)
+
 ## Features
 
 - Lazy load history price data.
